@@ -74,7 +74,7 @@ impl Engine {
     pub fn new() -> Self {
         // Default to In-Memory implementation
         let store = Arc::new(InMemoryStateStore::new());
-        let task_queue = Arc::new(InMemoryTaskQueue::new(100));
+        let task_queue = Arc::new(InMemoryTaskQueue::new());
         Self::new_with_storage(store, task_queue)
     }
 

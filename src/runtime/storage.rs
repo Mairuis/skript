@@ -33,13 +33,13 @@ pub trait StateStore: Send + Sync {
 // --- In-Memory Implementations ---
 
 pub struct InMemoryTaskQueue {
-    sender: mpsc::Sender<Task>,
-    receiver: tokio::sync::Mutex<mpsc::Receiver<Task>>,
+    sender: mpsc::UnboundedSender<Task>,
+    receiver: tokio::sync::Mutex<mpsc::UnboundedReceiver<Task>>,
 }
 
 impl InMemoryTaskQueue {
-    pub fn new(capacity: usize) -> Self {
-        let (tx, rx) = mpsc::channel(capacity);
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
         Self {
             sender: tx,
             receiver: tokio::sync::Mutex::new(rx),
@@ -50,7 +50,7 @@ impl InMemoryTaskQueue {
 #[async_trait]
 impl TaskQueue for InMemoryTaskQueue {
     async fn push(&self, task: Task) -> Result<()> {
-        self.sender.send(task).await.map_err(|e| anyhow::anyhow!("Task channel closed: {}", e))
+        self.sender.send(task).map_err(|e| anyhow::anyhow!("Task channel closed: {}", e))
     }
 
     async fn pop(&self) -> Result<Option<Task>> {
