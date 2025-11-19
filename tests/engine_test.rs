@@ -124,7 +124,7 @@ async fn test_engine_parallel_join() {
     let branch1 = vec![
         Node { 
             id: "B1".to_string(), 
-            kind: NodeType::Action { 
+            kind: NodeType::Function { 
                 name: "assign".to_string(), 
                 params: HashMap::from([("value".to_string(), json!(true))]), 
                 output: Some("b1".to_string()) 
@@ -135,7 +135,7 @@ async fn test_engine_parallel_join() {
     let branch2 = vec![
         Node { 
             id: "B2".to_string(), 
-            kind: NodeType::Action { 
+            kind: NodeType::Function { 
                 name: "assign".to_string(), 
                 params: HashMap::from([("value".to_string(), json!(true))]), 
                 output: Some("b2".to_string()) 

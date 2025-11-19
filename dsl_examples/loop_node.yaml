@@ -41,6 +41,11 @@ workflow:
       name: "log"
       params: { msg: "Payment Failed or Timeout" }
 
+    # 循环后逻辑 (判断是成功了还是次数用完了)
+    - id: "post_loop_check"
+      type: "If"
+      branches: [{ condition: "${status} == 'PAID'" }]
+
     - id: "end"
       type: "End"
 
@@ -67,11 +72,6 @@ workflow:
     - source: "loop_gateway"
       target: "post_loop_check"
       branch_type: "break" # 标记为跳出路径
-    
-    # 循环后逻辑 (判断是成功了还是次数用完了)
-    - id: "post_loop_check"
-      type: "If"
-      branches: [{ condition: "${status} == 'PAID'" }]
       
     - source: "post_loop_check"
       target: "success_log"

@@ -72,7 +72,7 @@ impl Compiler {
                 kind: "end".to_string(),
                 params: json!({}),
             }),
-            NodeType::Action { name, params, output } => {
+            NodeType::Function { name, params, output } => {
                 let next = edges.first().map(|e| self.resolve_target(&e.target)).transpose()?;
                 
                 // Combine user params with system params
@@ -91,20 +91,113 @@ impl Compiler {
                     params: full_params,
                 })
             }
-            NodeType::If => {
-                 let mut branches = Vec::new();
+            NodeType::Assign { assignments, expression } => {
+                let next = edges.first().map(|e| self.resolve_target(&e.target)).transpose()?;
+                
+                let mut full_params = json!({
+                    "assignments": assignments,
+                    "expression": expression
+                });
+                
+                if let Some(obj) = full_params.as_object_mut() {
+                    if let Some(n) = next {
+                         obj.insert("next".to_string(), json!(n));
+                    }
+                }
+
+                Ok(BlueprintNode {
+                    kind: "assign".to_string(),
+                    params: full_params,
+                })
+            }
+            NodeType::Iteration { collection, item_var } => {
+                let mut next = None;
+                let mut body = None;
+
+                for edge in edges {
+                     let target_idx = self.resolve_target(&edge.target)?;
+                     if edge.branch_type.as_deref() == Some("body") {
+                         if body.is_some() {
+                             return Err(anyhow!("Multiple body branches for iteration node {}", node.id));
+                         }
+                         body = Some(target_idx);
+                     } else {
+                         if next.is_some() {
+                             return Err(anyhow!("Multiple next branches for iteration node {}", node.id));
+                         }
+                         next = Some(target_idx);
+                     }
+                }
+
+                Ok(BlueprintNode {
+                    kind: "iteration".to_string(),
+                    params: json!({
+                        "collection": collection,
+                        "item_var": item_var,
+                        "next": next,
+                        "body": body
+                    }),
+                })
+            }
+            NodeType::Loop { condition } => {
+                let mut next = None;
+                let mut body = None;
+
+                for edge in edges {
+                     let target_idx = self.resolve_target(&edge.target)?;
+                     if edge.branch_type.as_deref() == Some("body") {
+                         body = Some(target_idx);
+                     } else {
+                         next = Some(target_idx);
+                     }
+                }
+                
+                Ok(BlueprintNode {
+                    kind: "loop".to_string(),
+                    params: json!({
+                        "condition": condition,
+                        "body": body,
+                        "next": next
+                    }),
+                })
+            }
+            NodeType::If { branches: defined_branches } => {
+                 let mut compiled_branches = Vec::new();
                  let mut else_next = None;
 
                  for edge in edges {
                      let target_idx = self.resolve_target(&edge.target)?;
+                     
                      if let Some(cond) = &edge.condition {
-                         branches.push(json!({
+                         // Edge defines condition
+                         compiled_branches.push(json!({
                              "condition": cond,
                              "target": target_idx
                          }));
-                     } else {
+                     } else if let Some(idx) = edge.branch_index {
+                         // Edge refers to index in defined_branches
+                         if idx < defined_branches.len() {
+                             if let Some(cond) = defined_branches[idx].get("condition") {
+                                 compiled_branches.push(json!({
+                                     "condition": cond,
+                                     "target": target_idx
+                                 }));
+                             } else {
+                                 return Err(anyhow!("Branch {} for node {} has no condition", idx, node.id));
+                             }
+                         } else {
+                             return Err(anyhow!("Branch index {} out of bounds for node {}", idx, node.id));
+                         }
+                     } else if edge.branch_type.as_deref() == Some("else") {
                          if else_next.is_some() {
                              return Err(anyhow!("Multiple else branches found for node {}", node.id));
+                         }
+                         else_next = Some(target_idx);
+                     } else {
+                         // Fallback: treat as else if no condition/index? Or error?
+                         // If ambiguous, treat as else if not set.
+                         if else_next.is_some() {
+                              return Err(anyhow!("Multiple else/default branches found for node {}", node.id));
                          }
                          else_next = Some(target_idx);
                      }
@@ -113,7 +206,7 @@ impl Compiler {
                  Ok(BlueprintNode {
                      kind: "if".to_string(),
                      params: json!({
-                         "branches": branches,
+                         "branches": compiled_branches,
                          "else_next": else_next
                      }),
                  })

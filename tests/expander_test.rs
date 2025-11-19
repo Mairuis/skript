@@ -8,12 +8,12 @@ fn test_expand_parallel_node() {
     // 1. Build Workflow with Parallel Node
     // Start -> Parallel(p1) [Branch1: A, Branch2: B->C] -> End
     let branch1 = vec![
-        Node { id: "A".to_string(), kind: NodeType::Action { name: "log".to_string(), params: Default::default(), output: None } }
+        Node { id: "A".to_string(), kind: NodeType::Function { name: "log".to_string(), params: Default::default(), output: None } }
     ];
     
     let branch2 = vec![
-        Node { id: "B".to_string(), kind: NodeType::Action { name: "log".to_string(), params: Default::default(), output: None } },
-        Node { id: "C".to_string(), kind: NodeType::Action { name: "log".to_string(), params: Default::default(), output: None } }
+        Node { id: "B".to_string(), kind: NodeType::Function { name: "log".to_string(), params: Default::default(), output: None } },
+        Node { id: "C".to_string(), kind: NodeType::Function { name: "log".to_string(), params: Default::default(), output: None } }
     ];
 
     let workflow = WorkflowBuilder::new("parallel-expand-test")

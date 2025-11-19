@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use skript::compiler::{loader, core::Compiler};
 use skript::runtime::engine::Engine;
 use skript::nodes::common::{StartDefinition, EndDefinition};
-use skript::nodes::flow::{IfDefinition, ForkDefinition, JoinDefinition};
+use skript::nodes::flow::{IfDefinition, ForkDefinition, JoinDefinition, IterationDefinition, LoopDefinition};
 use skript::actions::builtin::{LogAction, AssignAction};
 use skript::actions::http::HttpAction;
 use std::sync::Arc;
@@ -28,7 +28,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize logging (optional)
-    tracing_subscriber::fmt::init();
+    // tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
 
@@ -54,6 +54,8 @@ async fn main() -> anyhow::Result<()> {
             engine.register_node(Box::new(IfDefinition));
             engine.register_node(Box::new(ForkDefinition));
             engine.register_node(Box::new(JoinDefinition));
+            engine.register_node(Box::new(IterationDefinition));
+            engine.register_node(Box::new(LoopDefinition));
 
             // Register Actions
             engine.register_action(Arc::new(LogAction));

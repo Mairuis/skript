@@ -60,7 +60,7 @@ impl WorkflowBuilder {
     pub fn if_node(mut self, id: &str) -> Self {
         self.nodes.push(Node {
             id: id.to_string(),
-            kind: NodeType::If,
+            kind: NodeType::If { branches: Vec::new() },
         });
         self
     }
@@ -86,6 +86,7 @@ impl WorkflowBuilder {
             target: target.to_string(),
             condition: None,
             branch_type: None,
+            branch_index: None,
         });
         self
     }
@@ -96,6 +97,7 @@ impl WorkflowBuilder {
             target: target.to_string(),
             condition: Some(condition.to_string()),
             branch_type: None,
+            branch_index: None,
         });
         self
     }
@@ -106,6 +108,7 @@ impl WorkflowBuilder {
             target: target.to_string(),
             condition: None,
             branch_type: Some("else".to_string()),
+            branch_index: None,
         });
         self
     }
@@ -143,7 +146,7 @@ impl ActionBuilder {
     pub fn build(mut self) -> WorkflowBuilder {
         self.workflow_builder.nodes.push(Node {
             id: self.id,
-            kind: NodeType::Action {
+            kind: NodeType::Function {
                 name: self.action_name,
                 params: self.params,
                 output: self.output,

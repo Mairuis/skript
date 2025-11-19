@@ -24,7 +24,7 @@ fn test_build_linear_workflow() {
 
     // 检查 Action 节点
     if let Some(node) = workflow.nodes.iter().find(|n| n.id == "http_get") {
-        if let NodeType::Action { name, params, output } = &node.kind {
+        if let NodeType::Function { name, params, output } = &node.kind {
             assert_eq!(name, "http_request");
             assert_eq!(params.get("url"), Some(&json!("https://api.example.com")));
             assert_eq!(*output, Some("response".to_string())); // 修正: Dereference output

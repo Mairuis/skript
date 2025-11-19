@@ -8,9 +8,13 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Workflow {
     pub id: String,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub variables: HashMap<String, Value>,
+    #[serde(default)]
     pub nodes: Vec<Node>,
+    #[serde(default)]
     pub edges: Vec<Edge>,
 }
 
@@ -20,14 +24,31 @@ pub struct Workflow {
 pub enum NodeType {
     Start,
     End,
-    Action {
+    #[serde(alias = "Action")]
+    Function {
         name: String,
+        #[serde(default)]
         params: HashMap<String, Value>,
         output: Option<String>,
     },
-    If, // 分支逻辑在 Edge 上
+    Assign {
+        #[serde(default)]
+        assignments: Vec<HashMap<String, Value>>,
+        expression: Option<String>,
+    },
+    If {
+        #[serde(default)]
+        branches: Vec<HashMap<String, String>>, // [{condition: "..."}]
+    },
     Parallel {
         branches: Vec<Branch>, // 嵌套子图
+    },
+    Iteration {
+        collection: String,
+        item_var: String,
+    },
+    Loop {
+        condition: String,
     },
     
     // --- 内部 IR 节点 (由 Expander 生成，不应在 YAML 中直接使用) ---
@@ -43,9 +64,6 @@ pub enum NodeType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Branch {
     pub nodes: Vec<Node>,
-    // Branch 不需要 edges，因为它是一条简单的链或者子图？
-    // 让我们假设 Branch 内部是一个完整的子图片段，或者简单的节点列表（默认线性连接）
-    // 现在的 DSL 设计 branches: - nodes: [...] 
 }
 
 /// DSL 中的节点
@@ -63,4 +81,5 @@ pub struct Edge {
     pub target: String,
     pub condition: Option<String>,
     pub branch_type: Option<String>, // "else", "body" 等
+    pub branch_index: Option<usize>,
 }

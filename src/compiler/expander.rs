@@ -69,6 +69,7 @@ impl Expander {
                         target: next_node.id.clone(),
                         condition: None,
                         branch_type: None,
+                        branch_index: None,
                     });
                 }
             }
@@ -85,6 +86,7 @@ impl Expander {
                 target: join_id.clone(),
                 condition: None,
                 branch_type: None,
+                branch_index: None,
             });
         }
 

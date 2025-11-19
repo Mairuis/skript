@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::test]
+#[ignore]
 async fn test_http_action() {
     // Start -> Http(Get httpbin) -> End
     let workflow = WorkflowBuilder::new("http-test")
