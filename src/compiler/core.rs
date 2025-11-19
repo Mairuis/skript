@@ -1,18 +1,36 @@
 use crate::dsl::{Workflow, Node, NodeType, Edge};
 use crate::runtime::blueprint::{Blueprint, BlueprintNode, NodeIndex};
 use crate::compiler::expander::Expander;
+use crate::compiler::optimizer::Optimizer;
+use crate::actions::ExecutionMode;
 use std::collections::HashMap;
 use anyhow::{Result, anyhow};
 use serde_json::json;
 
+pub struct CompilerConfig {
+    pub enable_fusion: bool,
+}
+
+impl Default for CompilerConfig {
+    fn default() -> Self {
+        Self { enable_fusion: true }
+    }
+}
+
 pub struct Compiler {
     id_map: HashMap<String, NodeIndex>,
+    config: CompilerConfig,
 }
 
 impl Compiler {
     pub fn new() -> Self {
+        Self::new_with_config(CompilerConfig::default())
+    }
+
+    pub fn new_with_config(config: CompilerConfig) -> Self {
         Self {
             id_map: HashMap::new(),
+            config,
         }
     }
 
@@ -49,12 +67,30 @@ impl Compiler {
             
         let start_index = *self.id_map.get(&start_node_id).unwrap();
 
-        Ok(Blueprint {
+        let blueprint = Blueprint {
             id: workflow.id,
             name: workflow.name,
             nodes: blueprint_nodes,
             start_index,
-        })
+        };
+
+        // 4. Pass 3: Optimize (Fusion)
+        if self.config.enable_fusion {
+            let optimizer = Optimizer::new();
+            // TODO: Ideally, this lookup should come from a registry.
+            // For now, we hardcode based on known types.
+            let lookup = |name: &str| -> Option<ExecutionMode> {
+                match name {
+                    "log" | "assign" => Some(ExecutionMode::Sync),
+                    "http" => Some(ExecutionMode::Async),
+                    _ => None, // Default to unknown/Async safe
+                }
+            };
+            
+            optimizer.optimize(blueprint, lookup)
+        } else {
+            Ok(blueprint)
+        }
     }
 
     fn transform_node(&self, node: &Node, adjacency: &HashMap<String, Vec<&Edge>>) -> Result<BlueprintNode> {

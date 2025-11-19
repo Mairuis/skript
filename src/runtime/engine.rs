@@ -79,13 +79,18 @@ impl Engine {
     }
 
     pub fn new_with_storage(store: Arc<dyn StateStore>, task_queue: Arc<dyn TaskQueue>) -> Self {
-        Self {
+        let mut engine = Self {
             blueprints: DashMap::new(),
             executable_cache: DashMap::new(),
             store,
             task_queue,
             node_registry: HashMap::new(),
-        }
+        };
+        
+        // Register internal FusedNode handler
+        engine.register_node(Box::new(crate::nodes::fused::FusedNodeDefinition));
+        
+        engine
     }
 
     pub fn register_blueprint(&self, blueprint: Blueprint) {

@@ -5,7 +5,7 @@ use crate::runtime::context::Context;
 use crate::nodes::common::{StartDefinition, EndDefinition};
 use crate::nodes::flow::{ForkDefinition, JoinDefinition};
 use crate::actions::builtin::AssignAction;
-use crate::compiler::core::Compiler;
+use crate::compiler::core::{Compiler, CompilerConfig};
 use crate::dsl::{Workflow, Node, NodeType, Edge, Branch};
 use crate::benchmark::actions::{FibonacciAction, SleepAction};
 use std::sync::Arc;
@@ -17,10 +17,11 @@ use anyhow::Result;
 
 pub struct BenchmarkRunner {
     engine: Arc<Engine>,
+    no_jit: bool,
 }
 
 impl BenchmarkRunner {
-    pub fn new() -> Self {
+    pub fn new(no_jit: bool) -> Self {
         let mut engine = Engine::new();
         engine.register_node(Box::new(StartDefinition));
         engine.register_node(Box::new(EndDefinition));
@@ -32,63 +33,100 @@ impl BenchmarkRunner {
         
         Self {
             engine: Arc::new(engine),
+            no_jit,
         }
     }
 
-    async fn run_once(&self, branch_count: usize, fib_n: u64) -> Result<(Duration, f64)> {
+    async fn run_once(&self, branch_count: usize, _fib_n: u64) -> Result<(Duration, f64)> {
         // 1. Build Workflow
         let mut branches = Vec::with_capacity(branch_count);
         for i in 0..branch_count {
+            let mut branch_nodes = Vec::new();
+            let branch_prefix = format!("b{}_", i);
+
+            // First node to initialize a variable
+            branch_nodes.push(Node {
+                id: format!("{}assign_0", branch_prefix),
+                kind: NodeType::Function {
+                    name: "assign".to_string(),
+                    params: HashMap::from([
+                        ("expression".to_string(), json!(format!("{}_temp_0 = 1", branch_prefix)))
+                    ]),
+                    output: None,
+                },
+            });
+
+            // 9 more consecutive assign nodes
+            for j in 1..10 {
+                branch_nodes.push(Node {
+                    id: format!("{}assign_{}", branch_prefix, j),
+                    kind: NodeType::Function {
+                        name: "assign".to_string(),
+                        params: HashMap::from([
+                            ("expression".to_string(), json!(format!("{}_temp_{} = {}_temp_{} + 1", branch_prefix, j, branch_prefix, j-1)))
+                        ]),
+                        output: None,
+                    },
+                });
+            }
+
+            // The last node in the chain will set the 'finished' variable
+            branch_nodes.push(Node {
+                id: format!("{}assign_final", branch_prefix),
+                kind: NodeType::Function {
+                    name: "assign".to_string(),
+                    params: HashMap::from([
+                        ("assignments".to_string(), json!([
+                            {
+                                "key": format!("finished_branch_{}", i),
+                                "value": true
+                            }
+                        ]))
+                    ]),
+                    output: None,
+                },
+            });
+            
             branches.push(Branch {
-                nodes: vec![
-                    Node {
-                        id: format!("task_{}", i),
-                        kind: NodeType::Function { 
-                            name: "fib".to_string(), 
-                            params: HashMap::from([
-                                ("n".to_string(), json!(fib_n))
-                            ]), 
-                            output: None 
-                        }
-                    }
-                ]
+                nodes: branch_nodes
             });
         }
 
-        let workflow_id = format!("bench_{}_{}", branch_count, fib_n);
+        let workflow_id = format!("bench_chain_{}", branch_count);
+        let mut nodes_vec = vec![
+            Node { id: "start".to_string(), kind: NodeType::Start },
+            Node { 
+                id: "par".to_string(), 
+                kind: NodeType::Parallel { branches } 
+            },
+            // We need a final join node after the parallel section
+            Node {
+                 id: "final_join".to_string(),
+                 kind: NodeType::Join { expect_count: branch_count }
+            },
+            Node { id: "end".to_string(), kind: NodeType::End { output: "overall_finished".to_string() } }
+        ];
+
+        // Add edges within the branches if not implicitly handled by Parallel expander
+        // The expander will handle linear connections within branches.
+
+        let mut edges_vec = vec![
+            Edge { source: "start".to_string(), target: "par".to_string(), condition: None, branch_type: None, branch_index: None },
+            Edge { source: "par".to_string(), target: "final_join".to_string(), condition: None, branch_type: None, branch_index: None },
+            Edge { source: "final_join".to_string(), target: "end".to_string(), condition: None, branch_type: None, branch_index: None },
+        ];
+        
         let workflow = Workflow {
             id: workflow_id.clone(),
-            name: "Benchmark".to_string(),
+            name: "Benchmark Chained Assign".to_string(),
             variables: HashMap::new(),
-            nodes: vec![
-                Node { id: "start".to_string(), kind: NodeType::Start },
-                Node { 
-                    id: "par".to_string(), 
-                    kind: NodeType::Parallel { branches } 
-                },
-                Node {
-                     id: "set_done".to_string(),
-                     kind: NodeType::Assign {
-                         assignments: vec![
-                             HashMap::from([
-                                 ("key".to_string(), json!("finished")),
-                                 ("value".to_string(), json!(true))
-                             ])
-                         ],
-                         expression: None
-                     }
-                },
-                Node { id: "end".to_string(), kind: NodeType::End { output: "finished".to_string() } }
-            ],
-            edges: vec![
-                Edge { source: "start".to_string(), target: "par".to_string(), condition: None, branch_type: None, branch_index: None },
-                Edge { source: "par".to_string(), target: "set_done".to_string(), condition: None, branch_type: None, branch_index: None },
-                Edge { source: "set_done".to_string(), target: "end".to_string(), condition: None, branch_type: None, branch_index: None },
-            ]
+            nodes: nodes_vec,
+            edges: edges_vec,
         };
 
         // 2. Compile
-        let mut compiler = Compiler::new();
+        let config = CompilerConfig { enable_fusion: !self.no_jit };
+        let mut compiler = Compiler::new_with_config(config);
         let blueprint = compiler.compile(workflow)?;
         self.engine.register_blueprint(blueprint.clone());
 
@@ -97,13 +135,20 @@ impl BenchmarkRunner {
         
         let start = Instant::now();
         
-        // Poll for completion
+        // Poll for completion - now we need to check all branch finished flags
         loop {
             tokio::time::sleep(Duration::from_micros(100)).await;
-            if let Some(val) = self.engine.get_instance_var(instance_id, "finished").await {
-                 if val == json!(true) {
-                     break;
-                 }
+            let mut all_finished = true;
+            for i in 0..branch_count {
+                let var_name = format!("finished_branch_{}", i);
+                if self.engine.get_instance_var(instance_id, &var_name).await != Some(json!(true)) {
+                    all_finished = false;
+                    break;
+                }
+            }
+
+            if all_finished {
+                 break;
             }
             if start.elapsed().as_secs() > 60 {
                 anyhow::bail!("Benchmark timeout");
@@ -111,7 +156,9 @@ impl BenchmarkRunner {
         }
 
         let duration = start.elapsed();
-        let tps = branch_count as f64 / duration.as_secs_f64();
+        let total_ops_per_branch = 10 + 1; // 10 assign + 1 final assign
+        let total_simulated_tasks = branch_count * total_ops_per_branch;
+        let tps = total_simulated_tasks as f64 / duration.as_secs_f64();
         
         Ok((duration, tps))
     }
@@ -121,11 +168,13 @@ impl BenchmarkRunner {
         let worker_count = cpu_count * 2;
         
         println!("==================================================================");
-        println!("🚀 SKRIPT AUTO-TUNING BENCHMARK");
+        println!("🚀 SKRIPT EXTREME STRESS BENCHMARK");
         println!("==================================================================");
         println!("CPU Cores: {}", cpu_count);
         println!("Workers:   {}", worker_count);
-        println!("Mode:      Fibonacci(20) [CPU Bound + Scheduling Stress]");
+        println!("JIT:       {}", if self.no_jit { "DISABLED" } else { "ENABLED" });
+        println!("Mode:      Chained Assign Tasks (10 per branch) [High CPU Load]");
+        println!("Strategy:  Auto-Ramp (2x) -> Sustain Test (10s)");
         println!("------------------------------------------------------------------");
 
         // Start workers
@@ -138,58 +187,91 @@ impl BenchmarkRunner {
         }
 
         let mut current_branches = 100;
-        let fib_n = 20;
-        let mut last_tps = 0.0;
-        let mut max_tps = 0.0;
-        let mut max_config = 0;
+        let _fib_n = 25; // Not used in this benchmark mode
+        let mut last_avg_tps = 0.0;
+        let mut peak_tps = 0.0;
+        let mut optimal_load = 0;
 
+        // 1. Ramp-up Phase
         loop {
-            print!("Testing with {:5} concurrent tasks... ", current_branches);
-            match self.run_once(current_branches, fib_n).await {
-                Ok((duration, tps)) => {
-                    println!("Done in {:>6.3}s | TPS: {:>8.2}", duration.as_secs_f64(), tps);
-                    
-                    if tps > max_tps {
-                        max_tps = tps;
-                        max_config = current_branches;
+            print!("Ramping: {:6} branches | Samples: ", current_branches);
+            
+            // Take 3 samples
+            let mut tps_sum = 0.0;
+            for _ in 0..3 {
+                match self.run_once(current_branches, _fib_n).await {
+                    Ok((_, tps)) => {
+                        tps_sum += tps;
+                        print!(".");
                     }
-
-                    // Ramp up strategy
-                    if tps > last_tps * 0.95 { // Still growing or plateaued
-                        last_tps = tps;
-                        // Aggressive increase
-                        current_branches = (current_branches as f64 * 1.5) as usize;
-                    } else {
-                        // Performance degraded significanty
-                        println!("⚠️  Performance degraded at {} tasks. Stopping ramp-up.", current_branches);
-                        break;
-                    }
-
-                    // Cap
-                    if current_branches > 100_000 {
-                        println!("🛑 Reached safety cap (100k tasks).");
+                    Err(e) => {
+                        println!("Error: {}", e);
                         break;
                     }
                 }
-                Err(e) => {
-                    println!("FAILED: {}", e);
-                    break;
-                }
+            }
+            let avg_tps = tps_sum / 3.0;
+            println!(" | TPS: {:>8.2}", avg_tps);
+
+            if avg_tps > peak_tps {
+                peak_tps = avg_tps;
+                optimal_load = current_branches;
+            }
+
+            // Ramp up strategy (Aggressive 2x)
+            if avg_tps > last_avg_tps * 0.98 { 
+                last_avg_tps = avg_tps;
+                current_branches = current_branches * 2;
+            } else {
+                println!("⚠️  Saturation detected at {} branches.", current_branches);
+                break;
+            }
+
+            if current_branches > 200_000 {
+                println!("🛑 Safety cap reached.");
+                break;
             }
         }
 
         println!("------------------------------------------------------------------");
-        println!("🏆 PEAK PERFORMANCE");
+        println!("🔥 SUSTAINED LOAD TEST (10s)");
         println!("------------------------------------------------------------------");
-        println!("Max TPS:       {:.2} tasks/sec", max_tps);
-        println!("Optimal Load:  {} concurrent tasks", max_config);
+        println!("Target Load: {} concurrent branches", optimal_load);
+        
+        let start_sustain = Instant::now();
+        let mut total_tasks_processed = 0;
+        let mut iterations = 0;
+
+        while start_sustain.elapsed().as_secs() < 10 {
+            iterations += 1;
+            match self.run_once(optimal_load, _fib_n).await {
+                Ok(_) => {
+                    total_tasks_processed += optimal_load;
+                    if iterations % 5 == 0 {
+                        print!("."); 
+                        use std::io::Write;
+                        std::io::stdout().flush().unwrap();
+                    }
+                }
+                Err(e) => println!("Sustain error: {}", e),
+            }
+        }
+        println!();
+
+        let sustain_duration = start_sustain.elapsed();
+        let sustained_tps = total_tasks_processed as f64 / sustain_duration.as_secs_f64();
+
+        println!("==================================================================");
+        println!("🏆 FINAL RESULTS");
+        println!("==================================================================");
+        println!("Peak TPS (Burst):   {:.2}", peak_tps);
+        println!("Sustained TPS:      {:.2}", sustained_tps);
+        println!("Optimal Load:       {}", optimal_load);
+        println!("Total Branches:     {}", total_tasks_processed);
+        println!("Total Assign Ops:   {}", total_tasks_processed * (10 + 1));
         println!("==================================================================");
 
-        // Cleanup
-        for h in handles {
-            h.abort();
-        }
-
+        for h in handles { h.abort(); }
         Ok(())
     }
 }

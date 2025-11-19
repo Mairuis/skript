@@ -65,7 +65,11 @@ enum Commands {
         vars: Vec<(String, serde_json::Value)>,
     },
     /// Run automated benchmark
-    Bench,
+    Bench {
+        /// Disable JIT Fusion Optimization
+        #[arg(long)]
+        no_jit: bool,
+    },
 }
 
 fn parse_key_val(s: &str) -> Result<(String, serde_json::Value), String> {
@@ -96,9 +100,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Bench => {
+        Commands::Bench { no_jit } => {
             use skript::benchmark::BenchmarkRunner;
-            let runner = BenchmarkRunner::new();
+            let runner = BenchmarkRunner::new(no_jit);
             runner.auto_tune().await?;
         }
         Commands::Run { file, vars } => {

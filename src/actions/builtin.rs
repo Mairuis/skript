@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use crate::actions::FunctionHandler;
+use crate::actions::{FunctionHandler, ExecutionMode};
 use crate::runtime::context::Context;
 use anyhow::Result;
 use std::fmt::Debug;
@@ -14,6 +14,10 @@ pub struct LogAction;
 impl FunctionHandler for LogAction {
     fn name(&self) -> &str {
         "log"
+    }
+
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Sync
     }
 
     fn validate(&self, _params: &Value) -> Result<()> {
@@ -37,6 +41,10 @@ pub struct AssignAction;
 impl FunctionHandler for AssignAction {
     fn name(&self) -> &str {
         "assign"
+    }
+
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Sync
     }
 
     fn validate(&self, _params: &Value) -> Result<()> {

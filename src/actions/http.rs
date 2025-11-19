@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use crate::actions::FunctionHandler;
+use crate::actions::{FunctionHandler, ExecutionMode};
 use crate::runtime::context::Context;
 use anyhow::{Result, anyhow};
 use std::fmt::Debug;
@@ -23,6 +23,10 @@ impl HttpAction {
 impl FunctionHandler for HttpAction {
     fn name(&self) -> &str {
         "http"
+    }
+
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Async
     }
 
     fn validate(&self, params: &Value) -> Result<()> {
