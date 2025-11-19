@@ -49,16 +49,14 @@ impl FunctionHandler for SysInfoAction {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    println!("[{}] Starting... Redis: {}, Workflow: {}", args.name, args.redis, args.workflow);
+    println!("[{}] Starting TEST Worker... Redis: {}", args.name, args.redis);
 
-    // 1. Setup Storage
     let client = redis::Client::open(args.redis.clone()).expect("Invalid Redis URL");
     let store = Arc::new(RedisStateStore::new(client.clone()));
     let queue = Arc::new(RedisTaskQueue::new(client, "skript:distributed:tasks".to_string()));
 
     let mut engine = Engine::new_with_storage(store, queue);
 
-    // 2. Register Standard Nodes
     engine.register_node(Box::new(StartDefinition));
     engine.register_node(Box::new(EndDefinition));
     engine.register_node(Box::new(IfDefinition));
@@ -67,18 +65,15 @@ async fn main() -> Result<()> {
     engine.register_function(Arc::new(LogAction));
     engine.register_function(Arc::new(AssignAction));
     
-    // 3. Register SysInfo Action
+    // Register Debug Action
     engine.register_function(Arc::new(SysInfoAction));
 
-    // 4. Load & Compile Workflow
     let workflow = load_workflow_from_yaml(&args.workflow).expect("Failed to load workflow");
     let mut compiler = Compiler::new();
     let blueprint = compiler.compile(workflow).expect("Failed to compile workflow");
     engine.register_blueprint(blueprint);
 
-    println!("[{}] Ready. Waiting for tasks...", args.name);
-
-    // 5. Run Loop
+    println!("[{}] Ready.", args.name);
     engine.run_worker().await;
 
     Ok(())

@@ -12,16 +12,16 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 fn build_worker_binary() {
-    println!("Building skript_worker binary...");
+    println!("Building distributed_worker example...");
     let status = Command::new("cargo")
-        .args(&["build", "--bin", "skript_worker"]) // Default debug build
+        .args(&["build", "--example", "distributed_worker"]) 
         .status()
-        .expect("Failed to build worker binary");
+        .expect("Failed to build worker example");
     assert!(status.success(), "Build failed");
 }
 
 fn spawn_worker(redis_url: &str, workflow_path: &str, name: &str) -> Child {
-    let bin_path = "./target/debug/skript_worker";
+    let bin_path = "./target/debug/examples/distributed_worker";
     Command::new(bin_path)
         .arg("--redis")
         .arg(redis_url)
