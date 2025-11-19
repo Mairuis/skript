@@ -18,7 +18,7 @@ async fn test_http_action() {
             .param("method", "GET")
             .output("resp")
             .build()
-        .end("end")
+        .end("end", "")
         .connect("start", "req")
         .connect("req", "end")
         .build();

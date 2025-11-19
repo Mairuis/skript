@@ -42,7 +42,7 @@ edges:
             .param("msg", "Hello from YAML")
             .output("log_result")
             .build()
-        .end("end")
+        .end("end", "")
         .connect("start", "action_node")
         .connect("action_node", "end")
         .build();

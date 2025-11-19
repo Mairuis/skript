@@ -12,7 +12,7 @@ fn test_build_linear_workflow() {
             .param("method", "GET")
             .output("response")
             .build()
-        .end("end")
+        .end("end", "")
         .connect("start", "http_get")
         .connect("http_get", "end")
         .build();
@@ -47,7 +47,7 @@ fn test_build_branching_workflow() {
         .function("branch_b", "log")
             .param("msg", "B")
             .build()
-        .end("end")
+        .end("end", "")
         // 连接
         .connect("start", "check_condition")
         .connect_if("check_condition", "branch_a", "${x} > 10")

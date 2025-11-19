@@ -39,10 +39,10 @@ impl WorkflowBuilder {
         self
     }
 
-    pub fn end(mut self, id: &str) -> Self {
+    pub fn end(mut self, id: &str, output_var: &str) -> Self {
         self.nodes.push(Node {
             id: id.to_string(),
-            kind: NodeType::End,
+            kind: NodeType::End { output: output_var.to_string() },
         });
         self
     }

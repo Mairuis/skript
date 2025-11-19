@@ -5,6 +5,7 @@ use crate::runtime::context::Context;
 use anyhow::Result;
 use std::fmt::Debug;
 use evalexpr::{eval_with_context, HashMapContext, ContextWithMutableVariables, DefaultNumericTypes};
+use tracing::{info, error};
 
 #[derive(Debug)]
 pub struct LogAction;
@@ -21,9 +22,9 @@ impl FunctionHandler for LogAction {
 
     async fn execute(&self, params: Value, _ctx: &Context) -> Result<Value> {
         if let Some(msg) = params.get("msg").and_then(|v| v.as_str()) {
-            println!("[LOG] {}", msg);
+            info!("[LOG] {}", msg);
         } else {
-            println!("[LOG] {:?}", params);
+            info!("[LOG] {:?}", params);
         }
         Ok(Value::Null)
     }
@@ -105,7 +106,7 @@ impl FunctionHandler for AssignAction {
                          }
                     }
                 },
-                Err(e) => eprintln!("Expression evaluation failed: {} -> {}", rhs, e),
+                Err(e) => error!("Expression evaluation failed: {} -> {}", rhs, e),
             }
         }
 

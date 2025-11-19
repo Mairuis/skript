@@ -19,7 +19,7 @@ fn test_expand_parallel_node() {
     let workflow = WorkflowBuilder::new("parallel-expand-test")
         .start("start")
         .parallel("p1", vec![branch1, branch2])
-        .end("end")
+        .end("end", "")
         .connect("start", "p1")
         .connect("p1", "end")
         .build();

@@ -1,5 +1,5 @@
 use crate::dsl::{Workflow, Node, NodeType, Edge, Branch};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 pub struct Expander {
     // 可以添加状态，如生成的 ID 计数器

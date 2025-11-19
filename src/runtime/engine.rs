@@ -28,12 +28,16 @@ pub struct Engine {
     task_receiver: Option<mpsc::Receiver<Task>>, 
 }
 
-struct EngineSyscall<'a> {
+use tokio::time::timeout;
+use std::time::Duration;
+use tracing::{info, error, warn};
+
+struct EngineSyscall {
     task: Task,
-    sender: &'a mpsc::Sender<Task>,
+    pending_tasks: Vec<Task>,
 }
 
-impl<'a> Syscall for EngineSyscall<'a> {
+impl Syscall for EngineSyscall {
     fn jump(&mut self, target: NodeIndex) {
         let new_task = Task {
             instance_id: self.task.instance_id,
@@ -41,7 +45,7 @@ impl<'a> Syscall for EngineSyscall<'a> {
             node_index: target,
             flow_id: self.task.flow_id,
         };
-        let _ = self.sender.try_send(new_task); 
+        self.pending_tasks.push(new_task);
     }
 
     fn fork(&mut self, targets: Vec<NodeIndex>) {
@@ -52,7 +56,7 @@ impl<'a> Syscall for EngineSyscall<'a> {
                 node_index: target,
                 flow_id: self.task.flow_id,
             };
-            let _ = self.sender.try_send(new_task);
+            self.pending_tasks.push(new_task);
         }
     }
 
@@ -143,12 +147,13 @@ impl Engine {
 
     pub async fn run_worker(&mut self) {
         let mut rx = self.task_receiver.take().expect("Worker already started");
-        println!("Worker started.");
+        info!("Worker started.");
 
         while let Some(task) = rx.recv().await {
             let instance = if let Some(i) = self.instances.get(&task.instance_id) {
                 i.clone()
             } else {
+                warn!(instance_id = %task.instance_id, "Instance not found for task");
                 continue;
             };
 
@@ -158,20 +163,46 @@ impl Engine {
                 if let Ok(n) = self.prepare_blueprint(&instance.workflow_id) {
                     n
                 } else {
-                    eprintln!("Failed to prepare blueprint for instance");
+                    error!(workflow_id = %instance.workflow_id, "Failed to prepare blueprint");
                     continue;
                 }
             };
+
+            if task.node_index >= nodes.len() {
+                error!(node_index = task.node_index, "Node index out of bounds");
+                continue;
+            }
 
             let node = &nodes[task.node_index];
             
             let mut syscall = EngineSyscall {
                 task: task.clone(),
-                sender: &self.task_sender,
+                pending_tasks: Vec::new(),
             };
 
-            if let Err(e) = node.execute(&instance, &task, &mut syscall).await {
-                eprintln!("Task failed: {:?}", e);
+            // Global timeout configuration (hardcoded for now)
+            let timeout_duration = Duration::from_secs(60);
+
+            match timeout(timeout_duration, node.execute(&instance, &task, &mut syscall)).await {
+                Ok(Ok(())) => {
+                    // Flush pending tasks
+                    // We spawn a task to send these to avoid deadlocking the worker loop if the channel is full.
+                    let tx = self.task_sender.clone();
+                    for new_task in syscall.pending_tasks {
+                        let tx_clone = tx.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = tx_clone.send(new_task).await {
+                                error!("Failed to schedule task (channel closed?): {}", e);
+                            }
+                        });
+                    }
+                }
+                Ok(Err(e)) => {
+                    error!(instance_id = %task.instance_id, node_index = task.node_index, error = ?e, "Task failed");
+                }
+                Err(_) => {
+                    error!(instance_id = %task.instance_id, node_index = task.node_index, "Task timed out after {:?}", timeout_duration);
+                }
             }
         }
     }

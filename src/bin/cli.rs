@@ -8,6 +8,7 @@ use skript::actions::http::HttpAction;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use tracing::info;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,23 +28,23 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize logging (optional)
-    // tracing_subscriber::fmt::init();
+    // Initialize logging
+    tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
 
     match &cli.command {
         Commands::Run { file } => {
-            println!("Loading workflow from: {:?}", file);
+            info!("Loading workflow from: {:?}", file);
 
             // 1. Load DSL
             let workflow = loader::load_workflow_from_yaml(&file.to_string_lossy())?;
-            println!("Loaded workflow: {}", workflow.id);
+            info!("Loaded workflow: {}", workflow.id);
 
             // 2. Compile
             let mut compiler = Compiler::new();
             let blueprint = compiler.compile(workflow)?;
-            println!("Compiled blueprint with {} nodes.", blueprint.nodes.len());
+            info!("Compiled blueprint with {} nodes.", blueprint.nodes.len());
 
             // 3. Setup Engine
             let mut engine = Engine::new();
@@ -66,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
 
             // 4. Start Execution
             let instance_id = engine.start_workflow(&blueprint.id, HashMap::new()).await?;
-            println!("Started instance: {}", instance_id);
+            info!("Started instance: {}", instance_id);
 
             // 5. Run Worker
             // In CLI mode, we want to run until completion.
@@ -75,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             // A better way for CLI is to wait until the workflow status is "Completed".
             // But our Engine doesn't expose status polling yet.
             
-            println!("Running... (Press Ctrl+C to stop)");
+            info!("Running... (Press Ctrl+C to stop)");
             engine.run_worker().await;
         }
     }

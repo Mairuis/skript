@@ -9,7 +9,7 @@ fn test_compile_linear_workflow() {
         .function("step1", "log")
             .param("msg", "hello")
             .build()
-        .end("end")
+        .end("end", "")
         .connect("start", "step1")
         .connect("step1", "end")
         .build();

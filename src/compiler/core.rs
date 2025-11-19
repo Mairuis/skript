@@ -68,9 +68,9 @@ impl Compiler {
                     params: json!({ "next": next }),
                 })
             }
-            NodeType::End => Ok(BlueprintNode {
+            NodeType::End { output } => Ok(BlueprintNode {
                 kind: "end".to_string(),
-                params: json!({}),
+                params: json!({ "output": output }),
             }),
             NodeType::Function { name, params, output } => {
                 let next = edges.first().map(|e| self.resolve_target(&e.target)).transpose()?;
