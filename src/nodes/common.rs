@@ -50,17 +50,31 @@ impl NodeDefinition for EndDefinition {
 }
 
 #[async_trait]
+
 impl Node for EndNode {
+
     async fn execute(&self, ctx: &Context, _task: &Task, syscall: &mut dyn Syscall) -> Result<()> {
+
         if !self.output_var.is_empty() {
-            if let Some(val) = ctx.get_var(&self.output_var) {
+
+            if let Some(val) = ctx.get_var(&self.output_var).await {
+
                 info!("Workflow Output: {:?}", val);
-                ctx.set_var("_WORKFLOW_OUTPUT", val);
+
+                ctx.set_var("_WORKFLOW_OUTPUT", val).await;
+
             } else {
+
                 warn!("End node configured to output '{}' but variable not found", self.output_var);
+
             }
+
         }
+
         syscall.terminate(); 
+
         Ok(())
+
     }
+
 }

@@ -48,7 +48,7 @@ impl FunctionHandler for AssignAction {
         if let Some(list) = params.get("assignments").and_then(|v| v.as_array()) {
             for item in list {
                 if let (Some(k), Some(v)) = (item.get("key").and_then(|s| s.as_str()), item.get("value")) {
-                    ctx.set_var(k, v.clone());
+                    ctx.set_var(k, v.clone()).await;
                 }
             }
         }
@@ -64,20 +64,21 @@ impl FunctionHandler for AssignAction {
 
             // Build context for evalexpr
             let mut eval_ctx = HashMapContext::<DefaultNumericTypes>::new();
-            for r in ctx.variables.iter() {
-                let (k, v) = (r.key(), r.value());
+            let all_vars = ctx.get_all_vars().await?;
+            
+            for (k, v) in all_vars {
                 let ev = match v {
-                    Value::String(s) => Some(evalexpr::Value::String(s.clone())),
+                    Value::String(s) => Some(evalexpr::Value::String(s)),
                     Value::Number(n) => {
                          if let Some(i) = n.as_i64() { Some(evalexpr::Value::Int(i)) }
                          else if let Some(f) = n.as_f64() { Some(evalexpr::Value::Float(f)) }
                          else { None }
                     },
-                    Value::Bool(b) => Some(evalexpr::Value::Boolean(*b)),
+                    Value::Bool(b) => Some(evalexpr::Value::Boolean(b)),
                     _ => None,
                 };
                 if let Some(ev) = ev {
-                    let _ = eval_ctx.set_value(k.clone(), ev);
+                    let _ = eval_ctx.set_value(k, ev);
                 }
             }
 
@@ -95,7 +96,7 @@ impl FunctionHandler for AssignAction {
                     if let Some(jv) = json_val {
                          // If it was an assignment, set the var
                          if let Some(var_name) = target_var {
-                             ctx.set_var(var_name, jv);
+                             ctx.set_var(var_name, jv).await;
                          } else {
                              // If just expression, maybe return it? 
                              // But we prioritize "value" param for return.

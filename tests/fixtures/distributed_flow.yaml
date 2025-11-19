@@ -1,0 +1,34 @@
+id: "distributed-flow"
+name: "Distributed Test"
+nodes:
+  - id: "start"
+    type: "Start"
+  
+  - id: "parallel_step"
+    type: "Parallel"
+    branches:
+      # Branch 1
+      - nodes:
+          - id: "b1_info"
+            type: "Function"
+            name: "sys_info"
+            output: "worker_info_1"
+            params: {}
+      
+      # Branch 2
+      - nodes:
+          - id: "b2_info"
+            type: "Function"
+            name: "sys_info"
+            output: "worker_info_2"
+            params: {}
+
+  - id: "end"
+    type: "End"
+    output: "worker_info_1" # Output one of them just for show
+
+edges:
+  - source: "start"
+    target: "parallel_step"
+  - source: "parallel_step"
+    target: "end"

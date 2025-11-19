@@ -1,9 +1,11 @@
 use uuid::Uuid;
 use crate::runtime::blueprint::NodeIndex;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub instance_id: Uuid,
+    pub workflow_id: String,
     pub token_id: Uuid,
     pub node_index: NodeIndex,
     /// 用于追踪 Fork/Join 的血缘关系

@@ -43,7 +43,7 @@ async fn test_http_action() {
         _ = tokio::time::sleep(Duration::from_secs(5)) => {}
     }
 
-    let resp = engine.get_instance_var(instance_id, "resp");
+    let resp = engine.get_instance_var(instance_id, "http_res").await;
     assert!(resp.is_some(), "Should have response");
     
     let val = resp.unwrap();

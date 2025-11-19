@@ -60,7 +60,7 @@ async fn test_engine_linear_execution() {
     }
 
     // 6. Verify State
-    let result = engine.get_instance_var(instance_id, "result_var");
+    let result = engine.get_instance_var(instance_id, "result_var").await;
     assert_eq!(result, Some(json!("success_value")));
 }
 
@@ -112,10 +112,10 @@ async fn test_engine_if_branching() {
         _ = tokio::time::sleep(Duration::from_millis(100)) => {}
     }
 
-    let result = engine.get_instance_var(instance_id, "path_result");
+    let result = engine.get_instance_var(instance_id, "path_result").await;
     assert_eq!(result, Some(json!("big_path")));
     
-    let x_val = engine.get_instance_var(instance_id, "x");
+    let x_val = engine.get_instance_var(instance_id, "x").await;
     assert_eq!(x_val, Some(json!(20)));
 }
 
@@ -177,9 +177,9 @@ async fn test_engine_parallel_join() {
         _ = tokio::time::sleep(Duration::from_millis(200)) => {}
     }
 
-    let b1 = engine.get_instance_var(instance_id, "b1");
-    let b2 = engine.get_instance_var(instance_id, "b2");
-    let status = engine.get_instance_var(instance_id, "final_status");
+    let b1 = engine.get_instance_var(instance_id, "b1").await;
+    let b2 = engine.get_instance_var(instance_id, "b2").await;
+    let status = engine.get_instance_var(instance_id, "final_status").await;
 
     assert_eq!(b1, Some(json!(true)), "Branch 1 should execute");
     assert_eq!(b2, Some(json!(true)), "Branch 2 should execute");

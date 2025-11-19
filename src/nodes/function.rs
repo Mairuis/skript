@@ -27,7 +27,7 @@ impl Node for FunctionNode {
                 if let Some(s) = v.as_str() {
                     if s.starts_with("${") && s.ends_with("}") {
                         let var_name = &s[2..s.len()-1];
-                        if let Some(val) = ctx.get_var(var_name) {
+                        if let Some(val) = ctx.get_var(var_name).await {
                             *v = val;
                         }
                     }
@@ -40,7 +40,7 @@ impl Node for FunctionNode {
 
         // 3. Write Output
         if let Some(out_key) = &self.output {
-            ctx.set_var(out_key, result);
+            ctx.set_var(out_key, result).await;
         }
 
         // 4. Jump Next
