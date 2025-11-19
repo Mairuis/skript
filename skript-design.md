@@ -11,11 +11,12 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
     *   **Rust 实现**: 无 GC，内存安全，零成本抽象。
     *   **Arena 内存布局**: 图节点存储在连续内存 (`Vec<Node>`)，通过索引 (`usize`) 访问，对 CPU 缓存极其友好。
     *   **Compiler 优化**: 支持节点融合 (Fusion)、预计算。
-*   **并发模型**:
-    *   **Actor/Task 模式**: 基于 `Tokio` 异步运行时和 `Crossbeam` 无锁队列。
+*   **并发与分布式**:
+    *   **抽象运行时 (Runtime Abstraction)**: 支持 **In-Memory** (单机高性能) 和 **Redis** (分布式水平扩展) 两种后端。
+    *   **Task 驱动**: 基于 `StateStore` 和 `TaskQueue` 的无状态 Worker 模型。
     *   **隐式并行 DSL**: 用户使用 `Parallel` 块，编译器自动生成底层的 `Fork` / `Join` 指令。
 *   **插件化节点系统**:
-    *   **ActionHandler**: 统一的 Trait 定义，支持生命周期钩子 (`validate`, `execute`)。
+    *   **FunctionHandler**: 统一的 Trait 定义，支持生命周期钩子 (`validate`, `execute`)。
     *   **编译期验证**: 自定义节点可以在 DSL 解析阶段拦截参数错误。
 *   **图灵完备**:
     *   支持变量系统 (Context)、控制流 (If/Else)、循环 (Loop/ForEach)、函数调用。
@@ -37,7 +38,7 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
 *   **输出**: `Blueprint` (只读、静态、优化的指令图)。
 
 ### 3.2 运行时层 (Runtime Layer - The Muscle)
-运行时是一个极简的虚拟机，负责执行 Blueprint。
+运行时是一个极简的虚拟机，负责执行 Blueprint。它已被抽象为基于接口的设计。
 
 *   **Blueprint (静态图)**:
     ```rust
@@ -46,23 +47,16 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
         start_index: usize,
     }
     ```
-*   **Instance (动态状态)**:
-    ```rust
-    struct Instance {
-        id: Uuid,
-        // 变量存储: 支持并发读写的 DashMap
-        context: DashMap<String, Value>, 
-        // 执行指针: 记录所有活跃的 Thread (Token)
-        tokens: DashMap<TokenId, Token>,
-        // Join 计数器: 记录每个 Join 节点还差几个分支
-        pending_joins: DashMap<NodeIndex, AtomicUsize>,
-        status: InstanceStatus,
-    }
-    ```
+*   **Storage Layer (SPI)**:
+    *   `TaskQueue`: 负责任务分发 (Push/Pop)。
+        *   *In-Memory*: `tokio::sync::mpsc`
+        *   *Redis*: `LPUSH` / `BRPOP`
+    *   `StateStore`: 负责状态存储 (Variables, Join Counters, Metadata)。
+        *   *In-Memory*: `DashMap`
+        *   *Redis*: `Hash` (Variables) + Lua Scripts (Atomic Counters)
 *   **Executor (执行器)**:
-    *   基于 `Tokio` 的 Worker 线程池。
-    *   循环从全局 **Task Queue** (`crossbeam::channel`) 抢占任务。
-    *   **Function Execution**: 调用 `FunctionHandler::execute`，传入解析后的参数。
+    *   **Worker**: 无状态计算单元。从 `TaskQueue` 抢占任务，执行 `Node` 逻辑，更新 `StateStore`，并将后续任务推回 `TaskQueue`。
+    *   **Context**: 每个任务执行时的临时上下文，封装了对 `StateStore` 的异步访问。
 
 ### 3.3 插件接口 (Plugin Interface)
 
@@ -71,75 +65,72 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
 ```rust
 #[async_trait]
 pub trait FunctionHandler: Send + Sync {
-    /// 节点的唯一名称，对应 DSL 中的 `name` (e.g., "http_request")
     fn name(&self) -> &str;
-
-    /// 编译期验证 (Compile Time)
-    /// 检查 DSL 中的 params 是否合法 (必填校验、类型校验)
     fn validate(&self, params: &Value) -> Result<(), ValidationError>;
-
-    /// 运行时执行 (Runtime)
-    /// params: 已经由引擎解析了变量插值的参数
-    /// ctx: 运行时上下文，可读取/写入变量
-    async fn execute(&self, params: Value, ctx: &mut Context) -> Result<Value, ExecutionError>;
+    async fn execute(&self, params: Value, ctx: &Context) -> Result<Value, ExecutionError>;
 }
 ```
 
-## 4. DSL 设计 (DSL Design)
+## 4. 高级调度与控制 (Phase 2 Design)
 
-DSL 旨在**人类可读**，屏蔽底层的复杂性。
+为了支持生产级的长运行工作流，引入调度器和暂停机制。
 
-1.  **Parallel Block (并行块)**:
-    *   替代显式的 Fork/Join。
-    *   DSL: `type: Parallel, branches: [nodes: [...], nodes: [...]]`
-    *   Compiler: 自动插入 Fork 和 Join 指令。
-2.  **Function (通用节点)**:
-    *   DSL: `type: Function, name: "my_function", params: {...}`
-    *   支持通过 `${var}` 语法引用变量。
-3.  **Variable Passing**:
-    *   `params`: 输入参数映射。
-    *   `output`: 指定结果写入哪个变量。
-4.  **Control Flow**:
-    *   `If`: 基于 Edge 或 Node 分支。
-    *   `Iteration`: ForEach 循环。
+### 4.1 暂停/恢复 (Pause/Resume)
+*   **Checkpoint 机制**: 
+    *   每次节点执行完毕（原子操作结束）是检查点的天然时机。
+    *   Worker 在生成后续任务前，检查 `InstanceMetadata` 中的状态。
+*   **逻辑流程**:
+    1.  用户发出 `Pause` 指令 -> 更新 `StateStore` 中 Instance 状态为 `Paused`。
+    2.  Worker 完成当前 Node 执行。
+    3.  Worker 检查状态：发现是 `Paused`。
+    4.  **挂起 (Suspend)**: Worker **不**将后续任务推入 `TaskQueue` (Ready)，而是推入 `SuspendedPool` (持久化存储)。
+    5.  用户发出 `Resume` 指令 -> 更新状态为 `Running` -> 将 `SuspendedPool` 中的任务移回 `TaskQueue`。
+
+### 4.2 调度器 (Scheduler)
+*   **目标**: 公平调度 (Round Robin) 和优先级控制 (Priority)。
+*   **机制**:
+    *   每个 Instance 拥有 `TimeSlice` (时间片) 或 `StepQuota` (步数配额)。
+    *   Worker 执行节点消耗配额。
+    *   当配额耗尽，Worker 强制执行 "Yield" 操作：将后续任务推入 `SuspendedPool` 而非 `ReadyQueue`。
+    *   **Scheduler 组件**: 一个独立的后台进程/线程，负责轮询所有 Instance，按策略（如 RR）补充配额，并将任务从 `SuspendedPool` 激活到 `ReadyQueue`。
+
+### 4.3 执行单元融合 (Execution Unit Fusion)
+*   **目标**: 减少 Redis 交互和网络开销。
+*   **逻辑**: 对于连续的、非阻塞的、无副作用（或副作用可控）的节点链（例如：`Assign -> Assign -> If -> Assign`），编译器或运行时可以将其视为一个 **Super Node**。
+*   **JIT 策略**: 
+    *   Worker 抢占到一个任务后，不仅执行当前 Node，如果后续 Node 是本地可执行且不需要重新调度的，则直接在本地继续执行，直到遇到 `Async I/O` (如 HTTP) 或 `Checkpoint` (时间片耗尽)。
 
 ## 5. 核心数据结构 (Rust Draft)
 
 ```rust
-// 节点定义 (Runtime IR)
-enum Node {
-    // 融合节点：包含一系列纯计算指令
-    Fused(Vec<Instruction>), 
-    
-    // 通用 Function 节点 (指向 Registry 中的 Handler)
-    Function { 
-        handler_name: String, 
-        params: Value, // 预编译的参数模板
-        output_var: Option<String> 
-    },
-    
-    // 控制流节点 (底层指令，DSL 中可能是 Parallel 块)
-    Fork(Vec<usize>), 
-    Join { target: usize, expect: usize }, 
-    
-    // 迭代器
-    Iteration(IterationConfig),
+// 任务定义
+struct Task {
+    instance_id: Uuid,
+    workflow_id: String,
+    node_index: usize,
+    // ...
+}
+
+// 实例元数据 (Phase 2)
+struct InstanceMetadata {
+    id: Uuid,
+    status: WorkflowStatus, // Running, Paused, Terminated
+    priority: u32,
+    quota_remaining: u32, // Time Slice
 }
 ```
 
 ## 6. 实施路线图 (Roadmap)
 
-1.  **Phase 1: Core (骨架)**
+1.  **Phase 1: Core (已完成)**
     *   定义 `Blueprint`, `Instance`, `Task`。
-    *   定义 `FunctionHandler` Trait。
     *   实现基础 Compiler (Parser -> Validator)。
-2.  **Phase 2: Plugin System (插件)**
-    *   实现 `FunctionRegistry`。
-    *   实现内置 Functions: `LogFunction`, `AssignFunction` (作为特殊 Function 或 Fused 指令), `SleepFunction`。
-    *   在 Compiler 中集成 `validate` 钩子。
-3.  **Phase 3: Concurrency & Flow (并发与流)**
-    *   实现 DSL 层的 `Parallel` 到 IR 层 `Fork/Join` 的转换逻辑 (Expander)。
-    *   实现 Executor 的并发调度。
-4.  **Phase 4: Advanced (高级)**
-    *   `HttpFunction` (带 Reqwest)。
-    *   表达式引擎集成。
+    *   实现 `InMemory` 和 `Redis` 两种 Runtime 后端。
+    *   实现分布式多进程 Worker 测试。
+2.  **Phase 2: Control Plane (进行中)**
+    *   **Metadata Management**: 在 `StateStore` 中引入实例元数据。
+    *   **Pause/Resume**: 实现挂起池 (`SuspendedPool`) 和状态检查逻辑。
+    *   **Scheduler**: 实现时间片轮转调度器。
+3.  **Phase 3: Optimization (规划中)**
+    *   **JIT / Node Fusion**: 优化连续节点的执行路径，减少队列交互。
+    *   **Expression Engine Optimization**: 预编译表达式以提高求值速度。
