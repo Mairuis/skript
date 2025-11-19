@@ -64,6 +64,8 @@ enum Commands {
         #[arg(long, short = 'D', value_parser = parse_key_val)]
         vars: Vec<(String, serde_json::Value)>,
     },
+    /// Run automated benchmark
+    Bench,
 }
 
 fn parse_key_val(s: &str) -> Result<(String, serde_json::Value), String> {
@@ -94,6 +96,11 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Bench => {
+            use skript::benchmark::BenchmarkRunner;
+            let runner = BenchmarkRunner::new();
+            runner.auto_tune().await?;
+        }
         Commands::Run { file, vars } => {
             info!("Running in Standalone Memory Mode");
             let mut engine = Engine::new(); // Defaults to Memory

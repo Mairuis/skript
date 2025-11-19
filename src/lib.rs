@@ -3,3 +3,4 @@ pub mod compiler;
 pub mod runtime;
 pub mod actions;
 pub mod nodes;
+pub mod benchmark;
