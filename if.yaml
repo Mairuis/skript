@@ -1,0 +1,7 @@
+workflow:
+    edge:
+      - id: 0x1
+        source: 0x0
+        target: 0x2
+
+    node:

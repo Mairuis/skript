@@ -1,0 +1,59 @@
+# 1. IF 节点 (If / Else If / Else)
+# 场景：根据用户等级打折
+workflow:
+  id: "demo-if-logic"
+  
+  nodes:
+    - id: "start"
+      type: "Start"
+
+    - id: "check_level"
+      type: "If"
+      # If 节点本身只定义逻辑，跳转由 Edge 的 condition 属性决定
+      # 或者在节点内定义分支逻辑（更常见于 Workflow 引擎，方便 UI 渲染）
+      branches:
+        - condition: "${user.level} == 'VIP'"
+        - condition: "${user.level} == 'Member'"
+        # 默认走 else (fallback)
+
+    - id: "vip_discount"
+      type: "Assign"
+      expression: "discount = 0.8"
+
+    - id: "member_discount"
+      type: "Assign"
+      expression: "discount = 0.9"
+
+    - id: "no_discount"
+      type: "Assign"
+      expression: "discount = 1.0"
+
+    - id: "end"
+      type: "End"
+
+  edges:
+    - source: "start"
+      target: "check_level"
+
+    # 分支 1: VIP
+    - source: "check_level"
+      target: "vip_discount"
+      branch_index: 0 # 对应 branches[0]
+
+    # 分支 2: Member
+    - source: "check_level"
+      target: "member_discount"
+      branch_index: 1 # 对应 branches[1]
+
+    # Else 分支
+    - source: "check_level"
+      target: "no_discount"
+      branch_type: "else" # 显式标记为 else
+
+    # 汇聚到 End
+    - source: "vip_discount"
+      target: "end"
+    - source: "member_discount"
+      target: "end"
+    - source: "no_discount"
+      target: "end"

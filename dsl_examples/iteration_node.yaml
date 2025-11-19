@@ -1,0 +1,57 @@
+# 3. Iteration 节点 (ForEach)
+# 场景：给购物车里的每个商品计算税费
+workflow:
+  id: "demo-foreach"
+
+  nodes:
+    - id: "start"
+      type: "Start"
+
+    - id: "foreach_gateway"
+      type: "Iteration"
+      collection: "${cart.items}" # 输入数组
+      item_var: "item"            # 当前项的变量名 (Local Scope)
+      index_var: "idx"            # 索引变量名
+
+    - id: "calc_tax"
+      type: "Assign"
+      # 在这里 item 是局部变量，不会覆盖外部
+      expression: "item.tax = item.price * 0.1"
+
+    - id: "log_item"
+      type: "Function"
+      name: "log"
+      params:
+        msg: "Item ${idx}: ${item.name} tax is ${item.tax}"
+
+    - id: "finish_log"
+      type: "Function"
+      name: "log"
+      params: { msg: "All items processed" }
+
+    - id: "end"
+      type: "End"
+
+  edges:
+    - source: "start"
+      target: "foreach_gateway"
+
+    # 迭代路径 (Body)
+    - source: "foreach_gateway"
+      target: "calc_tax"
+      branch_type: "body"
+
+    - source: "calc_tax"
+      target: "log_item"
+
+    # 回到网关 (自动获取下一项)
+    - source: "log_item"
+      target: "foreach_gateway" # 必须指回网关，由网关决定是继续还是结束
+
+    # 结束路径 (Completed)
+    - source: "foreach_gateway"
+      target: "finish_log"
+      branch_type: "break"
+
+    - source: "finish_log"
+      target: "end"

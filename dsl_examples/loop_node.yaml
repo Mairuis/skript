@@ -1,0 +1,87 @@
+# 2. Loop 节点 (While 循环)
+# 场景：轮询支付状态，直到成功或超时
+workflow:
+  id: "demo-while-loop"
+
+  nodes:
+    - id: "start"
+      type: "Start"
+
+    - id: "init_retry"
+      type: "Assign"
+      expression: "retry_count = 0"
+
+    - id: "loop_gateway"
+      type: "Loop" # 类似于 While
+      condition: "${status} != 'PAID' && ${retry_count} < 3"
+
+    - id: "check_api"
+      type: "Function"
+      name: "http_request"
+      params:
+        url: "https://api.payment.com/status"
+      output: "status" # 更新 status 变量
+
+    - id: "inc_retry"
+      type: "Assign"
+      expression: "retry_count = retry_count + 1"
+
+    - id: "wait"
+      type: "Function"
+      name: "sleep"
+      params: { seconds: 2 }
+
+    - id: "success_log"
+      type: "Function"
+      name: "log"
+      params: { msg: "Payment Success!" }
+
+    - id: "fail_log"
+      type: "Function"
+      name: "log"
+      params: { msg: "Payment Failed or Timeout" }
+
+    - id: "end"
+      type: "End"
+
+  edges:
+    - source: "start"
+      target: "init_retry"
+    - source: "init_retry"
+      target: "loop_gateway"
+
+    # 循环体 (Condition == True)
+    - source: "loop_gateway"
+      target: "check_api"
+      branch_type: "body" # 标记为循环体路径
+
+    # 循环内流转
+    - source: "check_api"
+      target: "inc_retry"
+    - source: "inc_retry"
+      target: "wait"
+    - source: "wait"
+      target: "loop_gateway" # 回到判断点
+
+    # 循环结束 (Condition == False)
+    - source: "loop_gateway"
+      target: "post_loop_check"
+      branch_type: "break" # 标记为跳出路径
+    
+    # 循环后逻辑 (判断是成功了还是次数用完了)
+    - id: "post_loop_check"
+      type: "If"
+      branches: [{ condition: "${status} == 'PAID'" }]
+      
+    - source: "post_loop_check"
+      target: "success_log"
+      branch_index: 0
+      
+    - source: "post_loop_check"
+      target: "fail_log"
+      branch_type: "else"
+
+    - source: "success_log"
+      target: "end"
+    - source: "fail_log"
+      target: "end"

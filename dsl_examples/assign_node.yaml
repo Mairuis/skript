@@ -1,0 +1,40 @@
+# 4. Variable Assign 节点
+# 场景：复杂的变量计算和赋值
+workflow:
+  id: "demo-assignment"
+
+  nodes:
+    - id: "start"
+      type: "Start"
+
+    - id: "init_vars"
+      type: "Assign"
+      # 支持多个赋值操作
+      assignments:
+        - key: "base_price"
+          value: 100
+        - key: "quantity"
+          value: 5
+
+    - id: "calc_total"
+      type: "Assign"
+      # 支持简单的算术表达式 (需要表达式引擎支持)
+      expression: "total_price = base_price * quantity"
+
+    - id: "apply_coupon"
+      type: "Assign"
+      # 字符串拼接
+      expression: "receipt_msg = 'Total is: ' + total_price"
+
+    - id: "end"
+      type: "End"
+
+  edges:
+    - source: "start"
+      target: "init_vars"
+    - source: "init_vars"
+      target: "calc_total"
+    - source: "calc_total"
+      target: "apply_coupon"
+    - source: "apply_coupon"
+      target: "end"

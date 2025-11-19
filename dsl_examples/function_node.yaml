@@ -1,0 +1,50 @@
+# 5. Function 节点
+# 场景：调用外部服务、脚本或子流程
+workflow:
+  id: "demo-function"
+
+  nodes:
+    - id: "start"
+      type: "Start"
+
+    # 示例 A: HTTP 请求 (内置 Action)
+    - id: "fetch_data"
+      type: "Function"
+      name: "http_request" # 对应 Runtime 注册的 Action Name
+      params:
+        url: "https://api.github.com/zen"
+        method: "GET"
+        timeout: 5000
+      output: "github_zen" # 结果存入变量
+
+    # 示例 B: 简单的 JS 脚本 (如果引擎支持 QuickJS/Deno)
+    - id: "process_text"
+      type: "Function"
+      name: "js_eval"
+      params:
+        script: "return github_zen.toUpperCase();"
+        args: ["github_zen"]
+      output: "upper_zen"
+
+    # 示例 C: 调用另一个 Workflow (Sub-workflow)
+    - id: "call_subflow"
+      type: "Function"
+      name: "run_workflow"
+      params:
+        workflow_id: "another-flow-id"
+        input_vars:
+          message: "${upper_zen}"
+      output: "subflow_result"
+
+    - id: "end"
+      type: "End"
+
+  edges:
+    - source: "start"
+      target: "fetch_data"
+    - source: "fetch_data"
+      target: "process_text"
+    - source: "process_text"
+      target: "call_subflow"
+    - source: "call_subflow"
+      target: "end"
