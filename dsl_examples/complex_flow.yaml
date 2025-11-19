@@ -1,0 +1,122 @@
+workflow:
+  id: "complex-workflow-demo"
+  name: "Comprehensive Workflow Demo"
+  variables:
+    user_id: "user_123"
+    order_status: "pending"
+    items_to_process: ["item_X", "item_Y", "item_Z"]
+    processed_count: 0
+    total_cost: 0
+
+nodes:
+  - id: "start"
+    type: "Start"
+    next: "fetch_user_profile"
+
+  - id: "fetch_user_profile"
+    type: "Function"
+    name: "http_request"
+    params:
+      url: "https://api.example.com/users/${user_id}"
+      method: "GET"
+    output: "user_profile"
+    next: "check_user_status"
+
+  - id: "check_user_status"
+    type: "If"
+    # 条件分支，由 Edge 决定路由
+    branches:
+      - condition: "${user_profile.is_vip} == true"
+        # If Node 的 next 在 Edge 定义
+    else: # Default branch
+
+  - id: "vip_branch"
+    type: "Assign"
+    expression: "discount = 0.8"
+    next: "process_order_parallel"
+
+  - id: "non_vip_branch"
+    type: "Assign"
+    expression: "discount = 1.0"
+    next: "process_order_parallel"
+
+  - id: "process_order_parallel"
+    type: "Parallel"
+    next: "finalize_order" # 所有并行分支完成后汇聚
+    branches:
+      - nodes: # 分支 1: 处理库存
+          - id: "check_inventory"
+            type: "Function"
+            name: "inventory_service"
+            params: { item_list: "${items_to_process}" }
+            output: "inventory_check_result"
+            # 内部没有 next，到此结束
+            
+      - nodes: # 分支 2: 发送通知 (如果 VIP 则邮件，否则短信)
+          - id: "send_notification_branch_start"
+            type: "If"
+            branches:
+              - condition: "${user_profile.is_vip} == true"
+            else: # Default branch
+
+          - id: "send_email"
+            type: "Function"
+            name: "email_service"
+            params: { to: "${user_profile.email}", msg: "VIP Order placed!" }
+            # 内部没有 next，到此结束
+
+          - id: "send_sms"
+            type: "Function"
+            name: "sms_service"
+            params: { to: "${user_profile.phone}", msg: "Order placed!" }
+            # 内部没有 next，到此结束
+            
+  - id: "finalize_order"
+    type: "Iteration"
+    collection: "${items_to_process}"
+    item_var: "current_item"
+    next: "update_order_status" # 迭代完成后
+
+  - id: "calculate_item_cost"
+    type: "Assign"
+    expression: "total_cost = total_cost + (current_item.price * discount)"
+    next: "iteration_continue" # 指回 Iteration 节点，由 Iteration 决定下一项或结束
+
+  - id: "update_order_status"
+    type: "Function"
+    name: "db_update"
+    params: { table: "orders", id: "${user_id}", status: "processed", cost: "${total_cost}" }
+    output: "db_update_result"
+    next: "end"
+
+  - id: "end"
+    type: "End"
+
+edges:
+  # If Node 的分支路由
+  - source: "check_user_status"
+    target: "vip_branch"
+    condition: "${user_profile.is_vip} == true" # VIP 分支
+  - source: "check_user_status"
+    target: "non_vip_branch"
+    condition: "true" # Else 分支 (总是满足)
+
+  # Iteration 的循环体
+  - source: "finalize_order"
+    target: "calculate_item_cost"
+    branch_type: "body" # 指向循环体
+
+  # Iteration 内部的循环点，必须指向 Iteration 节点本身
+  - source: "calculate_item_cost"
+    target: "finalize_order" # 自动处理下一项或结束
+
+  # Parallel 内部的 If/Else 分支连接到 Parallel 块的末尾
+  - source: "send_notification_branch_start"
+    target: "send_email"
+    condition: "${user_profile.is_vip} == true"
+  - source: "send_notification_branch_start"
+    target: "send_sms"
+    condition: "true"
+
+  # 注意：Parallel 块内部的 next 都是隐式的，分支到头即可
+  # 比如 send_email, send_sms, check_inventory 跑完就等待外部的 Parallel 节点 Join

@@ -1,0 +1,35 @@
+workflow:
+  id: "simple-parallel-flow"
+  name: "Simple Parallel Example"
+
+nodes:
+  - id: "start"
+    type: "Start"
+    next: "do_parallel_tasks"
+
+  - id: "do_parallel_tasks"
+    type: "Parallel"
+    next: "final_log" # 所有并行分支完成后，会自动汇聚到这里
+    branches:
+      - nodes: # 第一个并行分支
+          - id: "task_a"
+            type: "Function"
+            name: "log"
+            params: { msg: "Executing Task A" }
+            # 内部没有 next，表示当前分支执行到此结束，等待 Parallel 块的 next
+        
+      - nodes: # 第二个并行分支
+          - id: "task_b"
+            type: "Function"
+            name: "log"
+            params: { msg: "Executing Task B" }
+            # 内部没有 next，表示当前分支执行到此结束，等待 Parallel 块的 next
+
+  - id: "final_log"
+    type: "Function"
+    name: "log"
+    params: { msg: "All parallel tasks completed!" }
+    next: "end"
+
+  - id: "end"
+    type: "End"
