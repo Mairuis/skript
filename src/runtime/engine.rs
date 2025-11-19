@@ -8,8 +8,8 @@ use crate::runtime::context::Context;
 use crate::runtime::task::Task;
 use crate::runtime::node::{Node, NodeDefinition};
 use crate::runtime::syscall::Syscall;
-use crate::actions::ActionHandler;
-use crate::nodes::action::ActionNodeDefinition;
+use crate::actions::FunctionHandler;
+use crate::nodes::function::FunctionNodeDefinition;
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -88,8 +88,8 @@ impl Engine {
         self.node_registry.insert(definition.name().to_string(), definition);
     }
 
-    pub fn register_action(&mut self, handler: Arc<dyn ActionHandler>) {
-        let def = ActionNodeDefinition { handler };
+    pub fn register_function(&mut self, handler: Arc<dyn FunctionHandler>) {
+        let def = FunctionNodeDefinition { handler };
         self.register_node(Box::new(def));
     }
 

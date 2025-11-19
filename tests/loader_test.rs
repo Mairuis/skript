@@ -13,7 +13,7 @@ nodes:
   - id: "start"
     type: "Start"
   - id: "action_node"
-    type: "Action"
+    type: "Function"
     name: "log"
     params:
       msg: "Hello from YAML"
@@ -38,7 +38,7 @@ edges:
         .name("YAML Test Workflow")
         .var("env", "dev")
         .start("start")
-        .action("action_node", "log")
+        .function("action_node", "log")
             .param("msg", "Hello from YAML")
             .output("log_result")
             .build()

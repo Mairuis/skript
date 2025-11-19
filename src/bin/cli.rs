@@ -58,9 +58,9 @@ async fn main() -> anyhow::Result<()> {
             engine.register_node(Box::new(LoopDefinition));
 
             // Register Actions
-            engine.register_action(Arc::new(LogAction));
-            engine.register_action(Arc::new(AssignAction));
-            engine.register_action(Arc::new(HttpAction::new()));
+            engine.register_function(Arc::new(LogAction));
+            engine.register_function(Arc::new(AssignAction));
+            engine.register_function(Arc::new(HttpAction::new()));
             
             engine.register_blueprint(blueprint.clone());
 

@@ -16,10 +16,10 @@ async fn test_engine_linear_execution() {
     // 1. Define Workflow
     let workflow = WorkflowBuilder::new("engine-test-linear")
         .start("start")
-        .action("step1", "log")
+        .function("step1", "log")
             .param("msg", "Engine is running!")
             .build()
-        .action("step2", "assign")
+        .function("step2", "assign")
             .param("value", "success_value")
             .output("result_var")
             .build()
@@ -43,8 +43,8 @@ async fn test_engine_linear_execution() {
     engine.register_node(Box::new(JoinDefinition));
 
     // Register Actions
-    engine.register_action(Arc::new(LogAction));
-    engine.register_action(Arc::new(AssignAction));
+    engine.register_function(Arc::new(LogAction));
+    engine.register_function(Arc::new(AssignAction));
     
     engine.register_blueprint(blueprint);
 
@@ -68,16 +68,16 @@ async fn test_engine_linear_execution() {
 async fn test_engine_if_branching() {
     let workflow = WorkflowBuilder::new("engine-test-if")
         .start("start")
-        .action("init_x", "assign")
+        .function("init_x", "assign")
             .param("value", 20)
             .output("x")
             .build()
         .if_node("check_x")
-        .action("branch_big", "assign")
+        .function("branch_big", "assign")
             .param("value", "big_path")
             .output("path_result")
             .build()
-        .action("branch_small", "assign")
+        .function("branch_small", "assign")
             .param("value", "small_path")
             .output("path_result")
             .build()
@@ -99,8 +99,8 @@ async fn test_engine_if_branching() {
     engine.register_node(Box::new(IfDefinition));
     engine.register_node(Box::new(ForkDefinition));
     engine.register_node(Box::new(JoinDefinition));
-    engine.register_action(Arc::new(LogAction));
-    engine.register_action(Arc::new(AssignAction));
+    engine.register_function(Arc::new(LogAction));
+    engine.register_function(Arc::new(AssignAction));
     engine.register_blueprint(blueprint);
 
     let instance_id = engine.start_workflow("engine-test-if", HashMap::new())
@@ -146,7 +146,7 @@ async fn test_engine_parallel_join() {
     let workflow = WorkflowBuilder::new("engine-test-parallel")
         .start("start")
         .parallel("p1", vec![branch1, branch2])
-        .action("after_join", "assign")
+        .function("after_join", "assign")
             .param("value", "done")
             .output("final_status")
             .build()
@@ -165,7 +165,7 @@ async fn test_engine_parallel_join() {
     engine.register_node(Box::new(IfDefinition));
     engine.register_node(Box::new(ForkDefinition));
     engine.register_node(Box::new(JoinDefinition));
-    engine.register_action(Arc::new(AssignAction));
+    engine.register_function(Arc::new(AssignAction));
     engine.register_blueprint(blueprint);
 
     let instance_id = engine.start_workflow("engine-test-parallel", HashMap::new())

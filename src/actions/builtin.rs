@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use crate::actions::ActionHandler;
+use crate::actions::FunctionHandler;
 use crate::runtime::context::Context;
 use anyhow::Result;
 use std::fmt::Debug;
@@ -10,7 +10,7 @@ use evalexpr::{eval_with_context, HashMapContext, ContextWithMutableVariables, D
 pub struct LogAction;
 
 #[async_trait]
-impl ActionHandler for LogAction {
+impl FunctionHandler for LogAction {
     fn name(&self) -> &str {
         "log"
     }
@@ -33,7 +33,7 @@ impl ActionHandler for LogAction {
 pub struct AssignAction;
 
 #[async_trait]
-impl ActionHandler for AssignAction {
+impl FunctionHandler for AssignAction {
     fn name(&self) -> &str {
         "assign"
     }

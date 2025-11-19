@@ -24,7 +24,7 @@ pub struct Workflow {
 pub enum NodeType {
     Start,
     End,
-    #[serde(alias = "Action")]
+    #[serde(alias = "Function")]
     Function {
         name: String,
         #[serde(default)]

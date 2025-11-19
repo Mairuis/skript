@@ -13,7 +13,7 @@ async fn test_http_action() {
     // Start -> Http(Get httpbin) -> End
     let workflow = WorkflowBuilder::new("http-test")
         .start("start")
-        .action("req", "http")
+        .function("req", "http")
             .param("url", "https://httpbin.org/get")
             .param("method", "GET")
             .output("resp")
@@ -29,7 +29,7 @@ async fn test_http_action() {
     let mut engine = Engine::new();
     engine.register_node(Box::new(StartDefinition));
     engine.register_node(Box::new(EndDefinition));
-    engine.register_action(Arc::new(HttpAction::new()));
+    engine.register_function(Arc::new(HttpAction::new()));
     
     engine.register_blueprint(blueprint);
 

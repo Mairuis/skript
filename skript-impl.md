@@ -25,7 +25,7 @@ graph TD
         Worker -->|Poll| Task
         Worker -->|Execute| Node_Impl
         Node_Impl -->|Syscall| Engine
-        Node_Impl -->|Action| Handler[ActionHandler]
+        Node_Impl -->|Function| Handler[FunctionHandler]
     end
 ```
 
@@ -90,14 +90,14 @@ graph TD
     *   在 `prepare` 阶段预编译表达式 AST。
     *   在 `execute` 阶段将 Context 变量注入求值环境。
 
-### 4.2 Action 节点 (`src/nodes/action.rs`)
-*   **ActionNode**: 这是一个通用包装器。
+### 4.2 Function 节点 (`src/nodes/function.rs`)
+*   **FunctionNode**: 这是一个通用包装器。
     *   **变量插值**: 在执行前扫描 `params`，将 `${var}` 替换为 `Context` 中的实际值。
-    *   **委托**: 调用内部 `Arc<dyn ActionHandler>::execute`。
+    *   **委托**: 调用内部 `Arc<dyn FunctionHandler>::execute`。
     *   **输出**: 将结果写入 `output` 指定的变量。
 
-### 4.3 内置 Actions
-*   **HttpAction (`src/actions/http.rs`)**:
+### 4.3 内置 Functions
+*   **HttpFunction (`src/actions/http.rs`)**:
     *   基于 `reqwest`。
     *   支持动态 URL, Method, Headers, Body。
     *   验证逻辑 (`validate`): 检查 `url` 参数是否存在。
@@ -106,17 +106,17 @@ graph TD
 
 | 特性 | 设计文档 (Design) | 实际实现 (Implementation) | 状态 |
 | :--- | :--- | :--- | :--- |
-| **DSL 结构** | Parallel Block, Actions | 完全实现，Expander 逻辑正确 | ✅ 一致 |
+| **DSL 结构** | Parallel Block, Functions | 完全实现，Expander 逻辑正确 | ✅ 一致 |
 | **内存布局** | Arena (`Vec<Node>`) | 实现为 `Vec<Box<dyn Node>>` (Trait Object) | ✅ 一致 |
 | **验证时机** | **Compiler Phase** (编译期) | **Loader Phase** (运行时加载 Blueprint 时) | ⚠️ **偏差** |
 | **表达式** | 计划在 "Phase 4" | 已通过 `evalexpr` 实现，并在 `IfNode` 中使用 | 🚀 超前 |
 | **Join 逻辑** | `expect` 计数器 | 基于 `AtomicUsize` 的无锁实现 | ✅ 一致 |
-| **插件系统** | `ActionHandler` Trait | 已实现，通过 `NodeRegistry` 注册 | ✅ 一致 |
+| **插件系统** | `FunctionHandler` Trait | 已实现，通过 `NodeRegistry` 注册 | ✅ 一致 |
 
 ### 关键偏差说明
-**验证时机**: 设计文档希望在 `Compiler::compile` 阶段就调用 `ActionHandler::validate` 抛出错误。目前的实现中，`Compiler` 仅做结构转换。`validate` 方法存在于 `NodeDefinition` trait 中，但目前似乎仅在单元测试或手动调用中生效，Engine 的 `prepare` 阶段主要调用 `prepare` 方法（虽然 `prepare` 内部可能会做检查，但主要用于实例化）。
+**验证时机**: 设计文档希望在 `Compiler::compile` 阶段就调用 `FunctionHandler::validate` 抛出错误。目前的实现中，`Compiler` 仅做结构转换。`validate` 方法存在于 `NodeDefinition` trait 中，但目前似乎仅在单元测试或手动调用中生效，Engine 的 `prepare` 阶段主要调用 `prepare` 方法（虽然 `prepare` 内部可能会做检查，但主要用于实例化）。
 
 ## 6. 总结 (Summary)
-Skript 目前已经完成了一个功能完备的核心引擎。它成功实现了设计文档中关于 **高并发 (Fork/Join)**、**插件化 (ActionHandler)** 和 **静态图编译 (Blueprint)** 的核心构想。虽然在验证逻辑的执行时机上与设计稍有出入，但这不影响运行时的正确性和性能。
+Skript 目前已经完成了一个功能完备的核心引擎。它成功实现了设计文档中关于 **高并发 (Fork/Join)**、**插件化 (FunctionHandler)** 和 **静态图编译 (Blueprint)** 的核心构想。虽然在验证逻辑的执行时机上与设计稍有出入，但这不影响运行时的正确性和性能。
 
 代码结构清晰，模块化程度高，易于进行后续的扩展（如添加更多内置节点、优化调度器等）。

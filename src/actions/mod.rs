@@ -9,7 +9,7 @@ pub mod http;
 
 /// 插件接口：所有功能节点必须实现此 Trait
 #[async_trait]
-pub trait ActionHandler: Send + Sync + Debug {
+pub trait FunctionHandler: Send + Sync + Debug {
     fn name(&self) -> &str;
     fn validate(&self, params: &Value) -> Result<()>;
     async fn execute(&self, params: Value, ctx: &Context) -> Result<Value>;

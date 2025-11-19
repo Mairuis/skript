@@ -6,7 +6,7 @@ fn test_compile_linear_workflow() {
     // 1. Build DSL
     let workflow = WorkflowBuilder::new("linear-compile-test")
         .start("start")
-        .action("step1", "log")
+        .function("step1", "log")
             .param("msg", "hello")
             .build()
         .end("end")

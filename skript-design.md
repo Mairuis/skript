@@ -31,7 +31,7 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
     2.  **Expander (展开)**: 将高层语法糖（如 `Parallel` 块）展开为底层的 `Fork/Join` 节点。
     3.  **Validator (验证)**: 
         *   结构检查 (连通性、环路)。
-        *   **Action Validation**: 调用具体 `ActionHandler` 的 `validate` 钩子检查节点参数。
+        *   **Function Validation**: 调用具体 `FunctionHandler` 的 `validate` 钩子检查节点参数。
     4.  **Optimizer (优化)**: 融合节点、预编译表达式。
     5.  **Codegen (生成)**: 构建 `Blueprint` (Arena Layout)。
 *   **输出**: `Blueprint` (只读、静态、优化的指令图)。
@@ -62,7 +62,7 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
 *   **Executor (执行器)**:
     *   基于 `Tokio` 的 Worker 线程池。
     *   循环从全局 **Task Queue** (`crossbeam::channel`) 抢占任务。
-    *   **Action Execution**: 调用 `ActionHandler::execute`，传入解析后的参数。
+    *   **Function Execution**: 调用 `FunctionHandler::execute`，传入解析后的参数。
 
 ### 3.3 插件接口 (Plugin Interface)
 
@@ -70,7 +70,7 @@ Skript 是一个**高性能、图灵完备、支持并发**且**易于扩展**�
 
 ```rust
 #[async_trait]
-pub trait ActionHandler: Send + Sync {
+pub trait FunctionHandler: Send + Sync {
     /// 节点的唯一名称，对应 DSL 中的 `name` (e.g., "http_request")
     fn name(&self) -> &str;
 
@@ -93,8 +93,8 @@ DSL 旨在**人类可读**，屏蔽底层的复杂性。
     *   替代显式的 Fork/Join。
     *   DSL: `type: Parallel, branches: [nodes: [...], nodes: [...]]`
     *   Compiler: 自动插入 Fork 和 Join 指令。
-2.  **Function/Action (通用节点)**:
-    *   DSL: `type: Function, name: "my_action", params: {...}`
+2.  **Function (通用节点)**:
+    *   DSL: `type: Function, name: "my_function", params: {...}`
     *   支持通过 `${var}` 语法引用变量。
 3.  **Variable Passing**:
     *   `params`: 输入参数映射。
@@ -111,8 +111,8 @@ enum Node {
     // 融合节点：包含一系列纯计算指令
     Fused(Vec<Instruction>), 
     
-    // 通用 Action 节点 (指向 Registry 中的 Handler)
-    Action { 
+    // 通用 Function 节点 (指向 Registry 中的 Handler)
+    Function { 
         handler_name: String, 
         params: Value, // 预编译的参数模板
         output_var: Option<String> 
@@ -131,15 +131,15 @@ enum Node {
 
 1.  **Phase 1: Core (骨架)**
     *   定义 `Blueprint`, `Instance`, `Task`。
-    *   定义 `ActionHandler` Trait。
+    *   定义 `FunctionHandler` Trait。
     *   实现基础 Compiler (Parser -> Validator)。
 2.  **Phase 2: Plugin System (插件)**
-    *   实现 `ActionRegistry`。
-    *   实现内置 Actions: `LogAction`, `AssignAction` (作为特殊 Action 或 Fused 指令), `SleepAction`。
+    *   实现 `FunctionRegistry`。
+    *   实现内置 Functions: `LogFunction`, `AssignFunction` (作为特殊 Function 或 Fused 指令), `SleepFunction`。
     *   在 Compiler 中集成 `validate` 钩子。
 3.  **Phase 3: Concurrency & Flow (并发与流)**
     *   实现 DSL 层的 `Parallel` 到 IR 层 `Fork/Join` 的转换逻辑 (Expander)。
     *   实现 Executor 的并发调度。
 4.  **Phase 4: Advanced (高级)**
-    *   `HttpAction` (带 Reqwest)。
+    *   `HttpFunction` (带 Reqwest)。
     *   表达式引擎集成。

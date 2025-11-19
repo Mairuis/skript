@@ -47,11 +47,11 @@ impl WorkflowBuilder {
         self
     }
 
-    pub fn action(self, id: &str, action_name: &str) -> ActionBuilder {
-        ActionBuilder {
+    pub fn function(self, id: &str, function_name: &str) -> FunctionBuilder {
+        FunctionBuilder {
             workflow_builder: self,
             id: id.to_string(),
-            action_name: action_name.to_string(),
+            function_name: function_name.to_string(),
             params: HashMap::new(),
             output: None,
         }
@@ -124,15 +124,15 @@ impl WorkflowBuilder {
     }
 }
 
-pub struct ActionBuilder {
+pub struct FunctionBuilder {
     workflow_builder: WorkflowBuilder,
     id: String,
-    action_name: String,
+    function_name: String,
     params: HashMap<String, Value>,
     output: Option<String>,
 }
 
-impl ActionBuilder {
+impl FunctionBuilder {
     pub fn param(mut self, key: &str, value: impl Into<Value>) -> Self {
         self.params.insert(key.to_string(), value.into());
         self
@@ -147,7 +147,7 @@ impl ActionBuilder {
         self.workflow_builder.nodes.push(Node {
             id: self.id,
             kind: NodeType::Function {
-                name: self.action_name,
+                name: self.function_name,
                 params: self.params,
                 output: self.output,
             },

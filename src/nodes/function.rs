@@ -2,23 +2,23 @@ use crate::runtime::node::{Node, NodeDefinition};
 use crate::runtime::context::Context;
 use crate::runtime::syscall::Syscall;
 use crate::runtime::task::Task;
-use crate::actions::ActionHandler;
+use crate::actions::FunctionHandler;
 use async_trait::async_trait;
 use serde_json::Value;
 use anyhow::Result;
 use std::sync::Arc;
 
-/// 将 ActionHandler 包装为 Node
+/// 将 FunctionHandler 包装为 Node
 #[derive(Debug)]
-pub struct ActionNode {
-    handler: Arc<dyn ActionHandler>,
+pub struct FunctionNode {
+    handler: Arc<dyn FunctionHandler>,
     params: Value,
     output: Option<String>,
     next: Option<usize>,
 }
 
 #[async_trait]
-impl Node for ActionNode {
+impl Node for FunctionNode {
     async fn execute(&self, ctx: &Context, _task: &Task, syscall: &mut dyn Syscall) -> Result<()> {
         // 1. Resolve Variables in Params
         let mut resolved_params = self.params.clone();
@@ -53,11 +53,11 @@ impl Node for ActionNode {
 }
 
 /// 对应的 Definition
-pub struct ActionNodeDefinition {
-    pub handler: Arc<dyn ActionHandler>,
+pub struct FunctionNodeDefinition {
+    pub handler: Arc<dyn FunctionHandler>,
 }
 
-impl NodeDefinition for ActionNodeDefinition {
+impl NodeDefinition for FunctionNodeDefinition {
     fn name(&self) -> &str {
         self.handler.name()
     }
@@ -73,9 +73,9 @@ impl NodeDefinition for ActionNodeDefinition {
         
         // The rest are user params
         // Note: We might want to remove "next" and "output" from params before passing to Node?
-        // Or just let Node keep them. ActionHandler usually ignores unknown params.
+        // Or just let Node keep them. FunctionHandler usually ignores unknown params.
         
-        Ok(Box::new(ActionNode {
+        Ok(Box::new(FunctionNode {
             handler: self.handler.clone(),
             params,
             output,

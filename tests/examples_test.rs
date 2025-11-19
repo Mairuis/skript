@@ -28,8 +28,8 @@ async fn run_example(file_name: &str) {
     engine.register_node(Box::new(IterationDefinition));
     engine.register_node(Box::new(LoopDefinition));
 
-    engine.register_action(Arc::new(LogAction));
-    engine.register_action(Arc::new(AssignAction));
+    engine.register_function(Arc::new(LogAction));
+    engine.register_function(Arc::new(AssignAction));
     
     // Mock other actions used in examples
     // "http_request", "inventory_service", "email_service", "sms_service", "db_update"
@@ -40,13 +40,13 @@ async fn run_example(file_name: &str) {
     #[derive(Debug)]
     struct MockAction(String);
     use async_trait::async_trait;
-    use skript::actions::ActionHandler;
+    use skript::actions::FunctionHandler;
     use skript::runtime::context::Context;
     use serde_json::Value;
     use anyhow::Result;
 
     #[async_trait]
-    impl ActionHandler for MockAction {
+    impl FunctionHandler for MockAction {
         fn name(&self) -> &str { &self.0 }
         fn validate(&self, _params: &Value) -> Result<()> { Ok(()) }
         async fn execute(&self, params: Value, _ctx: &Context) -> Result<Value> {
@@ -67,14 +67,14 @@ async fn run_example(file_name: &str) {
         }
     }
 
-    engine.register_action(Arc::new(MockAction("http_request".to_string())));
-    engine.register_action(Arc::new(MockAction("inventory_service".to_string())));
-    engine.register_action(Arc::new(MockAction("email_service".to_string())));
-    engine.register_action(Arc::new(MockAction("sms_service".to_string())));
-    engine.register_action(Arc::new(MockAction("db_update".to_string())));
-    engine.register_action(Arc::new(MockAction("js_eval".to_string())));
-    engine.register_action(Arc::new(MockAction("run_workflow".to_string())));
-    engine.register_action(Arc::new(MockAction("sleep".to_string())));
+    engine.register_function(Arc::new(MockAction("http_request".to_string())));
+    engine.register_function(Arc::new(MockAction("inventory_service".to_string())));
+    engine.register_function(Arc::new(MockAction("email_service".to_string())));
+    engine.register_function(Arc::new(MockAction("sms_service".to_string())));
+    engine.register_function(Arc::new(MockAction("db_update".to_string())));
+    engine.register_function(Arc::new(MockAction("js_eval".to_string())));
+    engine.register_function(Arc::new(MockAction("run_workflow".to_string())));
+    engine.register_function(Arc::new(MockAction("sleep".to_string())));
 
     engine.register_blueprint(blueprint);
 
